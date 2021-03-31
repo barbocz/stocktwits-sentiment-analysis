@@ -100,7 +100,7 @@ def tweets_preprocessing(raw_df):
 # Classification
 # Input processed dataframe into model
 # Shows classification report and confusion matrix
-def classification_report(processed_df, model=joblib.load("stocktwits_modelNB.pkl")):
+def classification_report(processed_df, model=joblib.load("model\stocktwits_modelNB.pkl")):
 
     # Getting Precision, Accuracy score from model trained on SPY comments for TSLA
     test_data = processed_df[processed_df["sentiment"].isin(["Bearish", "Bullish"])]
@@ -426,43 +426,42 @@ def backtest_results(combined_df, ema_list=None):
 
 # Import Tweets & Price
 # df = pd.read_pickle("ST_AAPL_raw.pkl")
-df=pd.read_csv('AAPL.csv')
-aapl_price_df = load('price_df.pkl')
-
-# aapl_price_df = pd.read_pickle("AAPL_Daily_yf.pkl")
-trained_model = joblib.load("stocktwits_modelNB.pkl")
+df=pd.read_csv('data\sentiments.csv')
+aapl_price_df = load('data\stock_price.pkl')
+trained_model = joblib.load('model\stocktwits_modelNB.pkl')
 
 if __name__ == "__main__":
-    # cleaned_df = tweets_preprocessing(df)  # Clean
+    cleaned_df = tweets_preprocessing(df)  # Clean
     # dump(cleaned_df, 'cleaned_df.pkl')
 
     # df = load('cleaned_df.pkl')
     #
-    cleaned_df = load('cleaned_df.pkl')  # Clean
+    # cleaned_df = load('cleaned_df.pkl')  # Clean
     #
     # print('Cleaned')
     sentiment_df = classify_tweets(cleaned_df, trained_model)  # Classify
-    # # dump(sentiment_df, 'sentiment_df.pkl')
-    #
-    # print('Classified')
+    # # # dump(sentiment_df, 'sentiment_df.pkl')
+    # #
+    # # print('Classified')
     filtered_df = filtering_trading_days(sentiment_df)  # Filter
-    # # dump(filtered_df, 'filtered_df.pkl')
-    #
+    # # # dump(filtered_df, 'filtered_df.pkl')
+    # #
     bb_df = bull_bear_ratio(filtered_df)  # Evaluate
-    # # dump(bb_df, 'bb_df.pkl')
-    #
-    #
+    # # # dump(bb_df, 'bb_df.pkl')
+    # #
+    # #
     merge_df = merge_price_sentiment(aapl_price_df, bb_df)  # Combine
-    # print('Merged')
-    # dump(merge_df, 'merge_df.pkl')
-
+    # # print('Merged')
+    # # dump(merge_df, 'merge_df.pkl')
+    #
     # merge_df=load('merge_df.pkl')
-    # merge_df.to_csv('AAPL_price_merge_df.csv')
+
     aapl_results = backtest_results(merge_df)  # Backtest
-    # print('Backtested')
-    print(aapl_results.info())
-    aapl_results.to_csv('aapl_strat.csv')
-    print(aapl_results['Current Net Profit EMA 5'])
+    print('Backtested')
+
+    merge_df.to_csv('data\stock_price_merge.csv')
+    aapl_results.to_csv('data\strategy.csv')
+
 
 
 

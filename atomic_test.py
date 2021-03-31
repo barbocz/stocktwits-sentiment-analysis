@@ -1,5 +1,5 @@
 from alpha_vantage.timeseries import TimeSeries
-import matplotlib.pyplot as plt
+
 import pandas as pd
 from datetime import datetime
 from joblib import dump, load
@@ -19,7 +19,7 @@ data['Date']=data.index
 
 print(data.info())
 print(data[['Open','Close','Adjusted Close','PM_change','Day_change','%_Change']])
-data.to_csv('AAPL_pricesss.csv')
+# data.to_csv('AAPL_pricesss.csv')
 dump(data, 'price_df.pkl')
 quit()
 

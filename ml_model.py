@@ -124,7 +124,7 @@ def run_model(model):
         grid, x_test, y_test = train_model_logistic_regression(training_data)
         display_best_result(grid)
         display_classification_report(df, grid, y_test, x_test)
-        dump(grid.best_estimator_, 'stocktwits_modelNB.pkl')
+        dump(grid.best_estimator_, 'model\stocktwits_modelNB.pkl')
         return grid
     else:
         print('Input either:\n1. "NB" - Naive Bayes\n2. "LR" - Logistic Regression')
@@ -209,25 +209,26 @@ def tweets_preprocessing(raw_df):
 
 # Run
 if __name__ == '__main__':
-    df=pd.read_csv('AAPL.csv')
+    df=pd.read_csv('data\sentiments.csv')
+
+
+    df = df[["sentiment", "message"]]
+    df = df[df["sentiment"].isin(["Bullish", "Bearish"])]
+    bullish_df = df[df["sentiment"] == "Bullish"].sample(10000)
+    bearish_df = df[df["sentiment"] == "Bearish"].sample(10000)
+    training_data = pd.concat([bullish_df, bearish_df]).sample(frac=1)
+    print(training_data)
+    # df = pd.read_pickle("AAPL_Cleaned.pkl")
 
     # df = df[["sentiment", "message"]]
-    # df = df[df["sentiment"].isin(["Bullish", "Bearish"])]
-    # bullish_df = df[df["sentiment"] == "Bullish"].sample(10000)
-    # bearish_df = df[df["sentiment"] == "Bearish"].sample(10000)
-    # training_data = pd.concat([bullish_df, bearish_df]).sample(frac=1)
-    # print(training_data)
-    # # df = pd.read_pickle("AAPL_Cleaned.pkl")
+    # df = df[df["sentiment"].isin(["Bullish", "Bearish"])]  # Filter down into labelled comments
     #
-    # # df = df[["sentiment", "message"]]
-    # # df = df[df["sentiment"].isin(["Bullish", "Bearish"])]  # Filter down into labelled comments
-    # #
-    # # # Under-sampling 30k of bullish, 30k of bearish to fix imbalance dataset
-    # # bullish_df = df[df["sentiment"] == "Bullish"].sample(30000)
-    # # bearish_df = df[df["sentiment"] == "Bearish"].sample(30000)
-    # # training_data = pd.concat([bullish_df, bearish_df]).sample(frac=1)
-    # #
-    # run_model("LR")
+    # # Under-sampling 30k of bullish, 30k of bearish to fix imbalance dataset
+    # bullish_df = df[df["sentiment"] == "Bullish"].sample(30000)
+    # bearish_df = df[df["sentiment"] == "Bearish"].sample(30000)
+    # training_data = pd.concat([bullish_df, bearish_df]).sample(frac=1)
+    #
+    run_model("LR")
 
 
 

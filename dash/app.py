@@ -20,10 +20,10 @@ import dash_table.FormatTemplate as FormatTemplate
 
 # In[9]:
 # Read Data
-merge_df_tsla = pd.read_csv("TSLA_price_merge_df.csv")
-merge_df = pd.read_csv("AAPL_price_merge_df.csv")
-aapl_strat = pd.read_csv("aapl_strat.csv")
-tsla_strat = pd.read_csv("tsla_strat.csv")
+merge_df_tsla = pd.read_csv("..\\data\\stock_price_merge.csv")
+merge_df = pd.read_csv("..\\data\\stock_price_merge.csv")
+aapl_strat = pd.read_csv("..\\data\\strategy.csv")
+tsla_strat = pd.read_csv("..\\data\\strategy.csv")
 
 
 # Functions
