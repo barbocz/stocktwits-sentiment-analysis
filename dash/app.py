@@ -27,7 +27,7 @@ tsla_strat = pd.read_csv("tsla_strat.csv")
 
 
 # Functions
-# days = 253-1 since day 0 has no returns
+# days = 253-1 since day 000 has no returns
 def sharpe(ema, ticker, rf=0, days=252):
     if ticker == '$AAPL':
         df = aapl_strat[f'Portfolio Value EMA {ema}'].pct_change()
