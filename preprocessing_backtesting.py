@@ -10,6 +10,7 @@ from sklearn.metrics import classification_report, confusion_matrix, accuracy_sc
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
+from joblib import dump, load
 stemmer = PorterStemmer()
 
 
@@ -53,45 +54,45 @@ def remove_emoji(tweets):
 def tweets_preprocessing(raw_df):
 
     # Removing all tickers from comments
-    raw_df['Message'] = raw_df['Message'].str.replace(r'([$][a-zA-z]{1,5})', '')
+    raw_df['message'] = raw_df['message'].str.replace(r'([$][a-zA-z]{1,5})', '')
 
     # Make all sentences small letters
-    raw_df['Message'] = raw_df['Message'].str.lower()
+    raw_df['message'] = raw_df['message'].str.lower()
 
     # Converting HTML to UTF-8
-    raw_df["Message"] = raw_df["Message"].apply(html.unescape)
+    raw_df["message"] = raw_df["message"].apply(html.unescape)
 
     # Removing hastags, mentions, pagebreaks, handles
     # Keeping the words behind hashtags as they may provide useful information about the comments e.g. #Bullish #Lambo
-    raw_df["Message"] = raw_df["Message"].str.replace(r'(@[^\s]+|[#]|[$])', ' ')  # Replace '@', '$' and '#...'
-    raw_df["Message"] = raw_df["Message"].str.replace(r'(\n|\r)', ' ')  # Replace page breaks
+    raw_df["message"] = raw_df["message"].str.replace(r'(@[^\s]+|[#]|[$])', ' ')  # Replace '@', '$' and '#...'
+    raw_df["message"] = raw_df["message"].str.replace(r'(\n|\r)', ' ')  # Replace page breaks
 
     # Removing https, www., any links etc
-    raw_df["Message"] = raw_df["Message"].str.replace(r'((https:|http:)[^\s]+|(www\.)[^\s]+)', ' ')
+    raw_df["message"] = raw_df["message"].str.replace(r'((https:|http:)[^\s]+|(www\.)[^\s]+)', ' ')
 
     # Removing all numbers
-    raw_df["Message"] = raw_df["Message"].str.replace(r'[\d]', '')
+    raw_df["message"] = raw_df["message"].str.replace(r'[\d]', '')
 
     # Remove emoji
-    raw_df["Message"] = raw_df["Message"].apply(lambda row: remove_emoji(row))
+    raw_df["message"] = raw_df["message"].apply(lambda row: remove_emoji(row))
 
     # Tokenization
-    raw_df['Message'] = raw_df['Message'].apply(word_tokenize)
+    raw_df['message'] = raw_df['message'].apply(word_tokenize)
 
     # Remove Stopwords
-    raw_df['Message'] = raw_df['Message'].apply(remove_stopwords)
+    raw_df['message'] = raw_df['message'].apply(remove_stopwords)
 
     # Remove Punctuation
-    raw_df['Message'] = raw_df['Message'].apply(lambda row: [word for word in row if word not in string.punctuation])
+    raw_df['message'] = raw_df['message'].apply(lambda row: [word for word in row if word not in string.punctuation])
 
     # Combining back to full sentences
-    raw_df['Message'] = raw_df['Message'].apply(lambda row: ' '.join(row))
+    raw_df['message'] = raw_df['message'].apply(lambda row: ' '.join(row))
 
     # Remove special punctuation not in string.punctuation
-    raw_df['Message'] = raw_df['Message'].str.replace(r"\“|\”|\‘|\’|\.\.\.|\/\/|\.\.|\.|\"|\'", '')
+    raw_df['message'] = raw_df['message'].str.replace(r"\“|\”|\‘|\’|\.\.\.|\/\/|\.\.|\.|\"|\'", '')
 
     # Remove all empty rows
-    processed_df = raw_df[raw_df['Message'].str.contains(r'^\s*$') == False]
+    processed_df = raw_df[raw_df['message'].str.contains(r'^\s*$') == False]
 
     return processed_df
 
@@ -102,28 +103,33 @@ def tweets_preprocessing(raw_df):
 def classification_report(processed_df, model=joblib.load("stocktwits_modelNB.pkl")):
 
     # Getting Precision, Accuracy score from model trained on SPY comments for TSLA
-    test_data = processed_df[processed_df["Sentiment"].isin(["Bearish", "Bullish"])]
-    test_preds = model.predict(test_data['Message'])
-    accuracy_score(test_data['Sentiment'], test_preds)
+    test_data = processed_df[processed_df["sentiment"].isin(["Bearish", "Bullish"])]
+    test_preds = model.predict(test_data['message'])
+    accuracy_score(test_data['sentiment'], test_preds)
 
-    print('accuracy score: ', accuracy_score(test_data['Sentiment'], test_preds))
+    print('accuracy score: ', accuracy_score(test_data['sentiment'], test_preds))
     print('\n')
-    print('confusion matrix: \n', confusion_matrix(test_data['Sentiment'], test_preds))
+    print('confusion matrix: \n', confusion_matrix(test_data['sentiment'], test_preds))
     print('\n')
-    print(classification_report(test_data['Sentiment'], test_preds))
+    print(classification_report(test_data['sentiment'], test_preds))
 
 
 # Using model to classify processed Tweets
 def classify_tweets(processed_df, model):
-    processed_df["ML Sentiment"] = model.predict(processed_df['Message'])
+    processed_df["ML sentiment"] = model.predict(processed_df['message'])
 
     # Combining ST labelled sentiment & ML Labelled sentiment
-    processed_df["Combined Sentiment"] = " "
-    processed_df.loc[processed_df["Sentiment"] == "N/A", "Combined Sentiment"] = processed_df['ML Sentiment']
-    processed_df.loc[processed_df["Sentiment"].isin(["Bullish", "Bearish"]),
-                     "Combined Sentiment"] = processed_df['Sentiment']
+    processed_df["Combined sentiment"] = " "
+    # processed_df.loc[processed_df["sentiment"] == "N/A", "Combined sentiment"] = processed_df['ML sentiment']
+    processed_df.loc[processed_df["sentiment"].isin(["Bullish", "Bearish"]),
+                     "Combined sentiment"] = processed_df['sentiment']
 
-    classified_df = processed_df[["User_id", "Message", "Date", "Time", "Combined Sentiment"]]
+    # classified_df = processed_df[["User_id", "message", "Date", "Time", "Combined sentiment"]]
+    processed_df["Date"] = processed_df["datetime"].apply(lambda x: x.split("T")[0])
+    processed_df["Time"] = processed_df["datetime"].apply(lambda x: x.split("T")[1].split("Z")[0])
+
+
+    classified_df = processed_df[["message", "Date","Time", "Combined sentiment"]]
     return classified_df
 
 
@@ -140,16 +146,21 @@ def next_weekday(d, weekday):
 def filtering_trading_days(classified_df):
     public_hol = ["2020-01-01", "2020-01-20", "2020-02-17", "2020-04-10",
                   "2020-05-25", "2020-07-03", "2020-09-07", "2020-11-26",
-                  "2020-12-25"]
+                  "2020-12-25",
+                  "2021-01-01", "2021-01-18", "2021-02-15", "2021-04-02",
+                  "2021-05-31", "2021-07-05", "2021-09-06", "2021-11-25",
+                  "2021-12-24",
+                  ]
 
     # Cleaning of Date Time
-    classified_df["Time"] = classified_df["Time"].apply(lambda x: x.split("Z")[0])
+    # classified_df["Time"] = classified_df["Time"].apply(lambda x: x.split("Z")[0])
+    classified_df["Date_Time"] = pd.to_datetime(sentiment_df["Date"] + " " + sentiment_df["Time"], format='%Y-%m-%d %H:%M:%S')
     classified_df["Hour of Day"] = pd.to_datetime(classified_df["Time"], format='%H:%M:%S').dt.hour.astype(str)
     classified_df.loc[classified_df["Hour of Day"].str.len() == 1, "Hour of Day"] = "0" + classified_df["Hour of Day"]
     classified_df["Date_Month"] = pd.to_datetime(classified_df["Date"]).dt.day
     classified_df["Date_Month"] = pd.to_datetime(classified_df["Date"]).dt.month_name() + "-" + \
                                   classified_df["Date_Month"].astype(str)
-    classified_df["Date_Time"] = classified_df["Date_Month"] + " / " + classified_df["Hour of Day"].astype(str)
+    # classified_df["Date_Time"] = classified_df["Date_Month"] + " / " + classified_df["Hour of Day"].astype(str)
     classified_df['Date'] = pd.to_datetime(classified_df['Date'])
     classified_df["Day_of_week"] = pd.to_datetime(classified_df["Date"]).dt.day_name()
     classified_df["Time"] = pd.to_datetime(classified_df["Time"], format='%H:%M:%S')
@@ -215,28 +226,43 @@ def filtering_trading_days(classified_df):
     classified_df["Pre-Market Date"] = np.select([c9, c8, c7, c6, c5, c4, c3, c2, c1],
                                                  [r9, r8, r7, r6, r5, r4, r3, r2, r1],
                                                  default=classified_df['Date'].astype(str))
+
     classified_df["PM_Date_Month"] = pd.to_datetime(classified_df["Pre-Market Date"]).dt.day
     classified_df["PM_Date_Month"] = pd.to_datetime(classified_df["Pre-Market Date"]).dt.month_name() + \
-                                     "-" + classified_df["PM_Date_Month"].astype(str)
-    classified_df = classified_df.loc[(classified_df["PM_Date_Month"] != "January-1") &
-                                      (classified_df["Date"] <= "2020-12-31")]
+                                      "-" + classified_df["PM_Date_Month"].astype(str)
+    # classified_df["PM_Date_Month"] = pd.to_datetime(classified_df["Pre-Market Date"]).dt.year + \
+    #                                  "-" + pd.to_datetime(classified_df["Pre-Market Date"]).dt.month_name() + \
+    #                                  "-" + classified_df["PM_Date_Month"].astype(str)
+
+
+    # classified_df = classified_df.loc[(classified_df["PM_Date_Month"] != "January-1") &
+    #                                   (classified_df["Date"] <= "2021-12-31")]
 
     # Filter out outside market hours (Before 2.30pm , after 9pm UTC+0)
     trade_hrs_df = classified_df[classified_df["Time"].dt.strftime('%H:%M:%S').between('00:00:00', '14:29:59') |
                                  classified_df["Time"].dt.strftime('%H:%M:%S').between('21:00:00', '23:59:59')]
+
+    trade_hrs_df['Pre-Market Date'] = pd.to_datetime(trade_hrs_df["Pre-Market Date"], format='%Y-%m-%d')
 
     return trade_hrs_df
 
 
 # Function to derive Bull-bear ratio
 def bull_bear_ratio(trade_hrs_df):
+    # bull_bear_df = trade_hrs_df.groupby(
+    #     ["PM_Date_Month", 'Combined sentiment']).agg({"message": "count"}).unstack().reset_index()
+    # bull_bear_df['PM_Date_Month'] = bull_bear_df['PM_Date_Month'].apply(lambda date: datetime.strptime(date, '%B-%d'))
+    # bull_bear_df.sort_values("PM_Date_Month", inplace=True)
+    # bull_bear_df['PM_Date_Month'] = bull_bear_df['PM_Date_Month'].dt.strftime('%B-%d')
+    # bull_bear_df.set_index('PM_Date_Month', inplace=True)
+    # bull_bear_df['Bull/Bear Ratio'] = (bull_bear_df[('message', 'Bullish')]) / (bull_bear_df[('message', 'Bearish')])
+
     bull_bear_df = trade_hrs_df.groupby(
-        ["PM_Date_Month", 'Combined Sentiment']).agg({"Message": "count"}).unstack().reset_index()
-    bull_bear_df['PM_Date_Month'] = bull_bear_df['PM_Date_Month'].apply(lambda date: datetime.strptime(date, '%B-%d'))
-    bull_bear_df.sort_values("PM_Date_Month", inplace=True)
-    bull_bear_df['PM_Date_Month'] = bull_bear_df['PM_Date_Month'].dt.strftime('%B-%d')
-    bull_bear_df.set_index('PM_Date_Month', inplace=True)
-    bull_bear_df['Bull/Bear Ratio'] = (bull_bear_df[('Message', 'Bullish')]) / (bull_bear_df[('Message', 'Bearish')])
+        ["Pre-Market Date", 'Combined sentiment']).agg({"message": "count"}).unstack().reset_index()
+    bull_bear_df.sort_values("Pre-Market Date", inplace=True)
+    bull_bear_df.set_index('Pre-Market Date', inplace=True)
+    bull_bear_df['Bull/Bear Ratio'] = (bull_bear_df[('message', 'Bullish')]) / (bull_bear_df[('message', 'Bearish')])
+    bull_bear_df.columns = ["Bearish", "Bullish", "Bull/Bear Ratio"]
 
     return bull_bear_df
 
@@ -248,10 +274,14 @@ def merge_price_sentiment(price_df, bull_bear_df, ema_list=None):
         ema_list = [5, 6, 7, 8, 9, 10, 15, 20]
     combined_df = bull_bear_df.merge(price_df, how="left", left_index=True, right_index=True)
 
+    # combined_df.columns = ["Bearish", "Bullish", "Bull/Bear Ratio",
+    #             "Date", "High", "Low", "Open",
+    #             "Close", "Volume", "Adjusted Close",
+    #             "PM_change", "Day_change", "%_Change"]
+
     combined_df.columns = ["Bearish", "Bullish", "Bull/Bear Ratio",
-                "Date", "High", "Low", "Open",
-                "Close", "Volume", "Adjusted Close",
-                "PM_change", "Day_change", "%_Change"]
+                           "Open", "High", "Low", "Close", "Adjusted Close", "Volume",
+                           "PM_change", "Day_change", "%_Change", "Date"]
 
     for ema in ema_list:
         exp_ema = combined_df['Bull/Bear Ratio'].ewm(span=ema, min_periods=ema, adjust=False).mean()
@@ -395,24 +425,44 @@ def backtest_results(combined_df, ema_list=None):
     return aapl_strat
 
 # Import Tweets & Price
-df = pd.read_pickle("ST_AAPL_raw.pkl")
-aapl_price_df = pd.read_pickle("AAPL_Daily_yf.pkl")
+# df = pd.read_pickle("ST_AAPL_raw.pkl")
+df=pd.read_csv('AAPL.csv')
+aapl_price_df = load('price_df.pkl')
+
+# aapl_price_df = pd.read_pickle("AAPL_Daily_yf.pkl")
 trained_model = joblib.load("stocktwits_modelNB.pkl")
 
 if __name__ == "__main__":
-    cleaned_df = tweets_preprocessing(df)  # Clean
-    print('Cleaned')
+    # cleaned_df = tweets_preprocessing(df)  # Clean
+    # dump(cleaned_df, 'cleaned_df.pkl')
+
+    # df = load('cleaned_df.pkl')
+    #
+    cleaned_df = load('cleaned_df.pkl')  # Clean
+    #
+    # print('Cleaned')
     sentiment_df = classify_tweets(cleaned_df, trained_model)  # Classify
-    print('Classified')
+    # # dump(sentiment_df, 'sentiment_df.pkl')
+    #
+    # print('Classified')
     filtered_df = filtering_trading_days(sentiment_df)  # Filter
-    print('Filtered')
+    # # dump(filtered_df, 'filtered_df.pkl')
+    #
     bb_df = bull_bear_ratio(filtered_df)  # Evaluate
-    print('Grouped')
+    # # dump(bb_df, 'bb_df.pkl')
+    #
+    #
     merge_df = merge_price_sentiment(aapl_price_df, bb_df)  # Combine
-    print('Merged')
+    # print('Merged')
+    # dump(merge_df, 'merge_df.pkl')
+
+    # merge_df=load('merge_df.pkl')
+    # merge_df.to_csv('AAPL_price_merge_df.csv')
     aapl_results = backtest_results(merge_df)  # Backtest
-    print('Backtested')
-    print(aapl_results)
+    # print('Backtested')
+    print(aapl_results.info())
+    aapl_results.to_csv('aapl_strat.csv')
+    print(aapl_results['Current Net Profit EMA 5'])
 
 
 

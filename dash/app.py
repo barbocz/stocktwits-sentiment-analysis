@@ -236,7 +236,7 @@ app.layout = dbc.Container(fluid=True, children=[
                          dbc.Tab(label='$TSLA', tab_id='$TSLA'),
                          dbc.Tab(label='$AAPL', tab_id='$AAPL')
                      ],
-                     active_tab="$TSLA"),
+                     active_tab="$AAPL"),
             dcc.Graph(id='Portfolio-chart'),
             dcc.Graph(id='buy-sell-chart'),
             dcc.Graph(id='bull-bear-chart'),
@@ -288,7 +288,7 @@ def update_graph(yaxis_column_name, ema):
                 showline=True,
                 tickmode='auto',
                 fixedrange=True,
-                range=['2020-01-01', '2020-12-31']),
+                range=['2021-01-01', '2021-04-01']),
             yaxis=dict(
                 type='linear',
                 showline=False,
@@ -336,7 +336,7 @@ def update_graph(yaxis_column_name, ema):
                 showline=True,
                 tickmode='auto',
                 fixedrange=True,
-                range=['2020-01-01', '2020-12-31']),
+                range=['2021-01-01', '2021-04-01']),
             yaxis=dict(
                 type='linear',
                 showline=False,
@@ -402,7 +402,7 @@ def update_graph(yaxis_column_name, ema):
                 showline=True,
                 tickmode='auto',
                 fixedrange=True,
-                range=['2020-01-01', '2020-12-31']),
+                range=['2021-01-01', '2021-04-01']),
             yaxis=dict(
                 type='linear',
                 showline=False,
@@ -460,7 +460,7 @@ def update_graph(yaxis_column_name, ema):
                 showline=True,
                 tickmode='auto',
                 fixedrange=True,
-                range=['2020-01-01', '2020-12-31']),
+                range=['2021-01-01', '2021-04-01']),
             yaxis=dict(
                 type='linear',
                 showline=False,
@@ -584,7 +584,7 @@ def update_graph_2(yaxis_column_name):
                 tickmode='auto',
                 nticks=7,
                 fixedrange=True,
-                range=['2020-01-01', '2020-12-31']),
+                range=['2021-01-01', '2021-04-01']),
             yaxis=dict(
                 # automargin=True,
                 type='linear',
@@ -682,7 +682,7 @@ def update_graph_2(yaxis_column_name):
                 tickmode='auto',
                 nticks=7,
                 fixedrange=True,
-                range=['2020-01-01', '2020-12-31']),
+                range=['2021-01-01', '2021-04-01']),
             yaxis=dict(
                 type='linear',
                 range=[0, 100],
