@@ -214,8 +214,8 @@ if __name__ == '__main__':
 
     df = df[["sentiment", "message"]]
     df = df[df["sentiment"].isin(["Bullish", "Bearish"])]
-    bullish_df = df[df["sentiment"] == "Bullish"].sample(10000)
-    bearish_df = df[df["sentiment"] == "Bearish"].sample(10000)
+    bullish_df = df[df["sentiment"] == "Bullish"].sample(25000)
+    bearish_df = df[df["sentiment"] == "Bearish"].sample(25000)
     training_data = pd.concat([bullish_df, bearish_df]).sample(frac=1)
     print(training_data)
     # df = pd.read_pickle("AAPL_Cleaned.pkl")

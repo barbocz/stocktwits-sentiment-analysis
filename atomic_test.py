@@ -4,7 +4,8 @@ import pandas as pd
 from datetime import datetime
 from joblib import dump, load
 
-
+print(10000 % 143.43)
+quit()
 
 ts = TimeSeries(key='T5DNTM8CM4WR9DSB', output_format='pandas')
 data, meta_data = ts.get_daily_adjusted(symbol='AAPL' ,outputsize='full')

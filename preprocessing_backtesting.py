@@ -284,7 +284,7 @@ def merge_price_sentiment(price_df, bull_bear_df, ema_list=None):
                            "PM_change", "Day_change", "%_Change", "Date"]
 
     for ema in ema_list:
-        exp_ema = combined_df['Bull/Bear Ratio'].ewm(span=ema, min_periods=ema, adjust=False).mean()
+        exp_ema = combined_df['Bull/Bear Ratio'].ewm(span=ema, min_periods=ema, adjust=True).mean()
         combined_df[f"Bull/Bear Ratio EMA {ema}"] = exp_ema
 
     combined_df["% of Bullish"] = round((combined_df['Bullish'] * 100) /
@@ -299,7 +299,6 @@ def merge_price_sentiment(price_df, bull_bear_df, ema_list=None):
 
 
 def backtest_results(combined_df, ema_list=None):
-
     if ema_list is None:
         ema_list = [5, 6, 7, 8, 9, 10, 15, 20]
 
@@ -424,6 +423,134 @@ def backtest_results(combined_df, ema_list=None):
 
     return aapl_strat
 
+def my_backtest_results(combined_df, ema_list=None):
+
+    if ema_list is None:
+        ema_list = [5, 6, 7, 8, 9, 10, 15, 20]
+
+    overall_dict = {}  # Dictionary for all the dfs
+
+    for ema in ema_list:
+        net_cash = 10000
+        start_port_val = net_cash
+        net_shares = 0
+        net_profit = 0
+        interim_master_list = []
+
+        for row in range(len(combined_df)):
+
+            bb_ratio = combined_df["Bull/Bear Ratio"][row]
+            bbratio_ema = combined_df[f"Bull/Bear Ratio EMA {ema}"][row]
+
+            # Buy Signal
+            if (bb_ratio > bbratio_ema) & (net_shares <= 0):
+                trx_dict = {}
+                date = combined_df["Date"][row]
+                open_px = combined_df["Open"][row]
+                close_px = combined_df["Adjusted Close"][row]
+
+                # To prevent miscalculation for day 0
+                if net_shares == 0:
+                    shares_bought = int(net_cash / open_px)  # Rounded down
+                    pre_market_profit = 0
+                else:
+                    pre_market_profit = net_shares * combined_df["PM_change"][row]
+                    shares_bought = int(net_cash / open_px)
+
+                net_shares = shares_bought
+                net_cash = net_cash % open_px
+                profit = net_shares * combined_df["Day_change"][row]
+                day_profit = pre_market_profit + profit
+                net_profit += day_profit
+                portfolio_val = start_port_val + net_profit
+
+                trx_dict[f"Date EMA {ema}"] = date
+                trx_dict[f"Portfolio Value EMA {ema}"] = portfolio_val
+                trx_dict[f"Net Shares EMA {ema}"] = net_shares
+                trx_dict[f"Net Cash EMA {ema}"] = net_cash
+                trx_dict[f"Action EMA {ema}"] = f"BUY {shares_bought} at Open"
+                trx_dict[f"PM Profit EMA {ema}"] = pre_market_profit
+                trx_dict[f"Trade Session Profit EMA {ema}"] = profit
+                trx_dict[f"Total Day Profit EMA {ema}"] = day_profit
+                trx_dict[f"Current Net Profit EMA {ema}"] = net_profit
+                trx_dict[f"Adjusted Close EMA {ema}"] = close_px
+                interim_master_list.append(trx_dict)
+
+            # Short signal
+            elif (bb_ratio < bbratio_ema) & (net_shares >= 0):
+                trx_dict = {}
+                date = combined_df["Date"][row]
+                open_px = combined_df["Open"][row]
+                close_px = combined_df["Adjusted Close"][row]
+
+                if net_shares == 0:
+                    shares_sold = int(net_cash / open_px)
+                    pre_market_profit = 0
+
+                else:
+                    pre_market_profit = net_shares * combined_df["PM_change"][row]
+                    net_cash = portfolio_val + pre_market_profit
+                    shares_sold = int(net_cash / open_px)
+
+
+                net_shares = -1*shares_sold
+                net_cash = net_cash % open_px
+
+                day_profit = day_profit + net_shares * combined_df["Day_change"][row]
+                net_profit = net_profit + day_profit + pre_market_profit
+                portfolio_val = start_port_val + net_profit + net_cash
+
+                trx_dict[f"Date EMA {ema}"] = date
+                trx_dict[f"Portfolio Value EMA {ema}"] = portfolio_val
+                trx_dict[f"Net Shares EMA {ema}"] = net_shares
+                trx_dict[f"Net Cash EMA {ema}"] = net_cash
+                trx_dict[f"Action EMA {ema}"] = f"SELL {shares_sold} at Open"
+                trx_dict[f"PM Profit EMA {ema}"] = pre_market_profit
+                trx_dict[f"Trade Session Profit EMA {ema}"] = profit
+                trx_dict[f"Total Day Profit EMA {ema}"] = day_profit
+                trx_dict[f"Current Net Profit EMA {ema}"] = net_profit
+                trx_dict[f"Adjusted Close EMA {ema}"] = close_px
+                interim_master_list.append(trx_dict)
+
+            else:
+                trx_dict = {}
+                date = combined_df["Date"][row]
+                close_px = combined_df["Adjusted Close"][row]
+
+                # Prevent NaN for day 0
+                if net_shares == 0:
+                    pre_market_profit = 0
+
+                else:
+                    pre_market_profit = net_shares * combined_df["PM_change"][row]
+
+                net_cash = net_cash
+                profit = net_shares * combined_df["Day_change"][row]
+                day_profit = pre_market_profit + profit
+                net_profit += day_profit
+                portfolio_val = start_port_val + net_profit
+
+                trx_dict[f"Date EMA {ema}"] = date
+                trx_dict[f"Portfolio Value EMA {ema}"] = portfolio_val
+                trx_dict[f"Net Shares EMA {ema}"] = net_shares
+                trx_dict[f"Net Cash EMA {ema}"] = net_cash
+                trx_dict[f"Action EMA {ema}"] = f"No Trade"
+                trx_dict[f"PM Profit EMA {ema}"] = pre_market_profit
+                trx_dict[f"Trade Session Profit EMA {ema}"] = profit
+                trx_dict[f"Total Day Profit EMA {ema}"] = day_profit
+                trx_dict[f"Current Net Profit EMA {ema}"] = net_profit
+                trx_dict[f"Adjusted Close EMA {ema}"] = close_px
+                interim_master_list.append(trx_dict)
+
+        overall_dict[f'aapl_strat_EMA_{ema}'] = pd.DataFrame(interim_master_list)
+
+    aapl_strat = pd.concat([overall_dict['aapl_strat_EMA_5'], overall_dict['aapl_strat_EMA_6'],
+                            overall_dict['aapl_strat_EMA_7'], overall_dict['aapl_strat_EMA_8'],
+                            overall_dict['aapl_strat_EMA_9'], overall_dict['aapl_strat_EMA_10'],
+                            overall_dict['aapl_strat_EMA_15'], overall_dict['aapl_strat_EMA_20']], axis=1)
+
+    return aapl_strat
+
 # Import Tweets & Price
 # df = pd.read_pickle("ST_AAPL_raw.pkl")
 df=pd.read_csv('data\sentiments.csv')
@@ -431,30 +558,34 @@ aapl_price_df = load('data\stock_price.pkl')
 trained_model = joblib.load('model\stocktwits_modelNB.pkl')
 
 if __name__ == "__main__":
-    cleaned_df = tweets_preprocessing(df)  # Clean
-    # dump(cleaned_df, 'cleaned_df.pkl')
+    # cleaned_df = tweets_preprocessing(df)  # Clean
+    # # dump(cleaned_df, 'cleaned_df.pkl')
+    #
+    # # df = load('cleaned_df.pkl')
+    # #
+    # # cleaned_df = load('cleaned_df.pkl')  # Clean
+    # #
+    # # print('Cleaned')
+    # sentiment_df = classify_tweets(cleaned_df, trained_model)  # Classify
+    # # # # dump(sentiment_df, 'sentiment_df.pkl')
+    # # #
+    # # # print('Classified')
+    # filtered_df = filtering_trading_days(sentiment_df)  # Filter
+    # # # # dump(filtered_df, 'filtered_df.pkl')
+    # # #
+    # bb_df = bull_bear_ratio(filtered_df)  # Evaluate
+    # dump(bb_df, 'bb_df.pkl')
+    bb_df=load('bb_df.pkl')
+    bb_df.to_csv('temp\\bb_df..csv')
 
-    # df = load('cleaned_df.pkl')
-    #
-    # cleaned_df = load('cleaned_df.pkl')  # Clean
-    #
-    # print('Cleaned')
-    sentiment_df = classify_tweets(cleaned_df, trained_model)  # Classify
-    # # # dump(sentiment_df, 'sentiment_df.pkl')
-    # #
-    # # print('Classified')
-    filtered_df = filtering_trading_days(sentiment_df)  # Filter
-    # # # dump(filtered_df, 'filtered_df.pkl')
-    # #
-    bb_df = bull_bear_ratio(filtered_df)  # Evaluate
-    # # # dump(bb_df, 'bb_df.pkl')
     # #
     # #
     merge_df = merge_price_sentiment(aapl_price_df, bb_df)  # Combine
-    # # print('Merged')
-    # # dump(merge_df, 'merge_df.pkl')
+    # # # print('Merged')
+    # dump(merge_df, 'temp\merge_df.pkl')
     #
-    # merge_df=load('merge_df.pkl')
+    # merge_df=load('temp\merge_df.pkl')
+    # merge_df.to_csv('temp\\merge_df.csv')
 
     aapl_results = backtest_results(merge_df)  # Backtest
     print('Backtested')
