@@ -209,13 +209,13 @@ def tweets_preprocessing(raw_df):
 
 # Run
 if __name__ == '__main__':
-    df=pd.read_csv('data\sentiments.csv')
+    df=pd.read_csv('data\sentiments_TSLA.csv')
 
 
     df = df[["sentiment", "message"]]
     df = df[df["sentiment"].isin(["Bullish", "Bearish"])]
-    bullish_df = df[df["sentiment"] == "Bullish"].sample(25000)
-    bearish_df = df[df["sentiment"] == "Bearish"].sample(25000)
+    bullish_df = df[df["sentiment"] == "Bullish"].sample(20000)
+    bearish_df = df[df["sentiment"] == "Bearish"].sample(20000)
     training_data = pd.concat([bullish_df, bearish_df]).sample(frac=1)
     print(training_data)
     # df = pd.read_pickle("AAPL_Cleaned.pkl")

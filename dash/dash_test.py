@@ -20,10 +20,10 @@ import dash_table.FormatTemplate as FormatTemplate
 
 # In[9]:
 # Read Data
-merge_df_tsla = pd.read_csv("..\\data\\stock_price_merge.csv")
-merge_df = pd.read_csv("..\\data\\stock_price_merge.csv")
-aapl_strat = pd.read_csv("..\\data\\strategy.csv")
-tsla_strat = pd.read_csv("..\\data\\strategy.csv")
+merge_df_tsla = pd.read_csv("../data/stock_price_merge_TSLA.csv")
+merge_df = pd.read_csv("../data/stock_price_merge_AAPL.csv")
+aapl_strat = pd.read_csv("../data/strategy_AAPL.csv")
+tsla_strat = pd.read_csv("../data/strategy_TSLA.csv")
 
 
 # Functions
@@ -238,7 +238,7 @@ app.layout = dbc.Container(fluid=True, children=[
                      ],
                      active_tab="$AAPL"),
             dcc.Graph(id='Portfolio-chart'),
-            dcc.Graph(id='buy-sell-chart'),
+            dcc.Graph(id='buy-sell-chart', clickData={'points': [{'customdata': '2020-01-01'}]}),
             html.Div([
                 dcc.Tabs(id='tabs-example', value='tab-1', children=[
                     dcc.Tab(label='Performance Chart', value='tab-1'),
@@ -255,15 +255,18 @@ app.layout = dbc.Container(fluid=True, children=[
     ])
 ])
 
-@app.callback(Output('tabs-example-content', 'children'),
-              Input('tabs-example', 'value'))
-def render_content(tab):
-    if tab == 'tab-1':
-        return dcc.Graph(id='bull-bear-chart')
-    elif tab == 'tab-2':
-        return html.Div([
-            html.H3('Tab content 2')
-        ])
+
+
+
+# @app.callback(Output('tabs-example-content', 'children'),
+#               Input('tabs-example', 'value'))
+# def render_content(tab):
+#     if tab == 'tab-1':
+#         return dcc.Graph(id='bull-bear-chart')
+#     elif tab == 'tab-2':
+#         return html.Div([
+#             html.H3('Tab content 2')
+#         ])
 
 
 # Function to render Portfolio Chart
@@ -297,7 +300,7 @@ def update_graph(yaxis_column_name, ema):
                 showline=True,
                 tickmode='auto',
                 fixedrange=True,
-                range=['2021-01-01', '2021-04-01']),
+                range=['2020-01-01', '2021-04-01']),
             yaxis=dict(
                 type='linear',
                 showline=False,
@@ -360,6 +363,7 @@ def update_graph(yaxis_column_name, ema):
         data = [
             go.Scatter(x=tsla_strat[f'Date EMA {ema}'], y=(tsla_strat[f"Adjusted Close EMA {ema}"]),
                        mode='lines', name="TSLA Closing Price",
+
                        line=dict(color='#86d3e3', width=2)),
             go.Scatter(x=tsla_strat.loc[tsla_strat[f"Action EMA {ema}"].str.contains("BUY"), f"Date EMA {ema}"],
                        y=(tsla_strat.loc[
@@ -407,6 +411,7 @@ def update_graph(yaxis_column_name, ema):
         data = [
             go.Scatter(x=aapl_strat[f'Date EMA {ema}'], y=(aapl_strat[f"Adjusted Close EMA {ema}"]),
                        mode='lines', name="AAPL Closing Price",
+                       customdata=tsla_strat[f'Date EMA {ema}'],
                        line=dict(color='#86d3e3', width=2)),
             go.Scatter(x=aapl_strat.loc[aapl_strat[f"Action EMA {ema}"].str.contains("BUY"), f"Date EMA {ema}"],
                        y=(aapl_strat.loc[
@@ -496,6 +501,7 @@ def update_graph_2(yaxis_column_name):
         fig.add_trace(go.Scatter(
             x=merge_df_tsla["Date"], y=merge_df_tsla["% of Bullish"],
             mode='lines',
+
             name="Bullish",
             line=dict(width=1, color='rgba(0,102,0,0.3)'),
             stackgroup='one',
@@ -722,6 +728,16 @@ def update_graph(yaxis_column_name, ema):
         df = aapl_strat.iloc[:, 71:80]
         return get_table(df, ema, ticker=yaxis_column_name)
 
+
+@app.callback(
+    Output('tabs-example-content', 'children'),
+    Input('buy-sell-chart', 'clickData'))
+def update_y_timeseries(clickData):
+    print(clickData)
+    return dcc.Graph(id='bull-bear-chart')
+    # return html.Div([
+    #         html.H3('Clicked')
+    #     ])
 
 # this is needed for the procfile to deploy to heroku
 server = app.server

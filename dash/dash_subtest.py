@@ -14,7 +14,10 @@ df = pd.read_csv(
     '8e0768211f6b747c0db42a9ce9a0937dafcbd8b2/'
     'indicators.csv')
 
+df.to_csv('sample.csv')
+
 available_indicators = df['Indicator Name'].unique()
+
 
 app.layout = html.Div([
     html.Div([
@@ -85,6 +88,8 @@ def update_graph(xaxis_column_name, yaxis_column_name,
                  xaxis_type, yaxis_type,
                  year_value):
     dff = df[df['Year'] == year_value]
+    # cd = dff[dff['Indicator Name'] == yaxis_column_name]['Country Name']
+    # print(cd)
 
     return {
         'data': [go.Scatter(
@@ -143,6 +148,7 @@ def create_time_series(dff, axis_type, title):
      dash.dependencies.Input('crossfilter-xaxis-column', 'value'),
      dash.dependencies.Input('crossfilter-xaxis-type', 'value')])
 def update_y_timeseries(clickData, xaxis_column_name, axis_type):
+    print(clickData)
     country_name = clickData['points'][0]['customdata']
     dff = df[df['Country Name'] == country_name]
     dff = dff[dff['Indicator Name'] == xaxis_column_name]
@@ -162,4 +168,4 @@ def update_x_timeseries(clickData, yaxis_column_name, axis_type):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=True, port=4000)

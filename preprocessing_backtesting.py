@@ -553,30 +553,30 @@ def my_backtest_results(combined_df, ema_list=None):
 
 # Import Tweets & Price
 # df = pd.read_pickle("ST_AAPL_raw.pkl")
-df=pd.read_csv('data\sentiments.csv')
-aapl_price_df = load('data\stock_price.pkl')
+df=pd.read_csv('data\sentiments_TSLA.csv')
+aapl_price_df = load('data\stock_price_TSLA.pkl')
 trained_model = joblib.load('model\stocktwits_modelNB.pkl')
 
 if __name__ == "__main__":
-    # cleaned_df = tweets_preprocessing(df)  # Clean
-    # # dump(cleaned_df, 'cleaned_df.pkl')
+    cleaned_df = tweets_preprocessing(df)  # Clean
+    # dump(cleaned_df, 'cleaned_df.pkl')
+
+    # df = load('cleaned_df.pkl')
     #
-    # # df = load('cleaned_df.pkl')
+    # cleaned_df = load('cleaned_df.pkl')  # Clean
+    #
+    # print('Cleaned')
+    sentiment_df = classify_tweets(cleaned_df, trained_model)  # Classify
+    # # # dump(sentiment_df, 'sentiment_df.pkl')
     # #
-    # # cleaned_df = load('cleaned_df.pkl')  # Clean
+    # # print('Classified')
+    filtered_df = filtering_trading_days(sentiment_df)  # Filter
+    # # # dump(filtered_df, 'filtered_df.pkl')
     # #
-    # # print('Cleaned')
-    # sentiment_df = classify_tweets(cleaned_df, trained_model)  # Classify
-    # # # # dump(sentiment_df, 'sentiment_df.pkl')
-    # # #
-    # # # print('Classified')
-    # filtered_df = filtering_trading_days(sentiment_df)  # Filter
-    # # # # dump(filtered_df, 'filtered_df.pkl')
-    # # #
-    # bb_df = bull_bear_ratio(filtered_df)  # Evaluate
+    bb_df = bull_bear_ratio(filtered_df)  # Evaluate
     # dump(bb_df, 'bb_df.pkl')
-    bb_df=load('bb_df.pkl')
-    bb_df.to_csv('temp\\bb_df..csv')
+    # bb_df=load('bb_df.pkl')
+    # bb_df.to_csv('temp\\bb_df..csv')
 
     # #
     # #
@@ -587,11 +587,11 @@ if __name__ == "__main__":
     # merge_df=load('temp\merge_df.pkl')
     # merge_df.to_csv('temp\\merge_df.csv')
 
-    aapl_results = backtest_results(merge_df)  # Backtest
+    results = backtest_results(merge_df)  # Backtest
     print('Backtested')
 
-    merge_df.to_csv('data\stock_price_merge.csv')
-    aapl_results.to_csv('data\strategy.csv')
+    merge_df.to_csv('data\stock_price_merge_TSLA.csv')
+    results.to_csv('data\strategy_TSLA.csv')
 
 
 
