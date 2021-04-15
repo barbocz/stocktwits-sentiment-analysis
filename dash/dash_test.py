@@ -15,6 +15,7 @@ from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 import dash_table as dt
 import dash_table.FormatTemplate as FormatTemplate
+from datetime import date
 
 # In[2]:
 
@@ -238,16 +239,15 @@ app.layout = dbc.Container(fluid=True, children=[
                      ],
                      active_tab="$AAPL"),
             dcc.Graph(id='Portfolio-chart'),
-            dcc.Graph(id='buy-sell-chart', clickData={'points': [{'customdata': '2020-01-01'}]}),
-            html.Div([
-                dcc.Tabs(id='tabs-example', value='tab-1', children=[
-                    dcc.Tab(label='Performance Chart', value='tab-1'),
-                    dcc.Tab(label='Sentiments', value='tab-2'),
-                ]),
-                html.Div(id='tabs-example-content',children=[dcc.Graph(id='bull-bear-chart')]),
+            dcc.Graph(id='buy-sell-chart', clickData={'points': [{'customdata': date.today().strftime("%Y-%m-%d")}]}),
 
-            ]),
-
+            dbc.Tabs(className="nav nav-pills", id='my-tab',
+                     children=[
+                         dbc.Tab(label='t1', tab_id='t1'),
+                         dbc.Tab(label='t2', tab_id='t2')
+                     ],
+                     active_tab="t2"),
+            html.Div(id="tab-content",children=[dcc.Graph(id='bull-bear-chart')]),
 
 
             dbc.Col(html.Div(id="data-table"))
@@ -255,7 +255,21 @@ app.layout = dbc.Container(fluid=True, children=[
     ])
 ])
 
+@app.callback(
+    Output('tab-content', 'children'),
+    [Input('buy-sell-chart', 'clickData'),Input('my-tab','active_tab')])
+def update_y_timeseries(clickData,active_tab):
+    if (len(clickData['points'])==3):
+        selected_day=clickData['points'][1]['x']
+    else:
+        selected_day=date.today().strftime("%Y-%m-%d")
 
+    if active_tab == "t1":
+        return dcc.Graph(id='bull-bear-chart'),
+    elif active_tab == "t2":
+        return html.Div([
+                html.H3(selected_day)
+            ])
 
 
 # @app.callback(Output('tabs-example-content', 'children'),
@@ -729,15 +743,7 @@ def update_graph(yaxis_column_name, ema):
         return get_table(df, ema, ticker=yaxis_column_name)
 
 
-@app.callback(
-    Output('tabs-example-content', 'children'),
-    Input('buy-sell-chart', 'clickData'))
-def update_y_timeseries(clickData):
-    print(clickData)
-    return dcc.Graph(id='bull-bear-chart')
-    # return html.Div([
-    #         html.H3('Clicked')
-    #     ])
+
 
 # this is needed for the procfile to deploy to heroku
 server = app.server
