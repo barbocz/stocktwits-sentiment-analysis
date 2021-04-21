@@ -3,8 +3,26 @@ from alpha_vantage.timeseries import TimeSeries
 import pandas as pd
 from datetime import datetime
 from joblib import dump, load
+import plotly.express as px
 
-print(10000 % 143.43)
+n='2021-04-20T13:26:32Z'
+t=n.split("T")[0]
+
+print(t)
+
+# fig = px.pie(df, values='tip', names='day')
+# fig.show()
+
+from datetime import date
+
+# df=load('temp/df_test.pkl')
+#
+# print(len(df[df['Combined sentiment']=='Bullish'].index))
+# print(len(df[df['Combined sentiment']=='Bearish'].index))
+
+
+# print(df)
+
 quit()
 
 ts = TimeSeries(key='T5DNTM8CM4WR9DSB', output_format='pandas')
