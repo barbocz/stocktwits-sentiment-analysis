@@ -190,7 +190,7 @@ def get_sentiment_property_table(ticker,current_day,ema,total_sentiment,bullish_
 
     row1 = html.Tr([html.Td("Date:"), html.Td(current_day)])
     row2 = html.Tr([html.Td("Total sentiment:"), html.Td(total_sentiment)])
-    row3 = html.Tr([html.Td("Bullish / Bearish ratio:"), html.Td('{:.3f}'.format(bullish_bearish_ratio))])
+    row3 = html.Tr([html.Td("Bullish / Bearish daily ratio:"), html.Td('{:.3f}'.format(bullish_bearish_ratio))])
     row4 = html.Tr([html.Td("Bullish / Bearish  EMA ratio:"), html.Td('{:.3f}'.format(calculated_ema))])
     row5 = html.Tr([html.Td("Signal:"), html.Td(signal)])
     row6 = html.Tr([html.Td(""), html.Td("")])
@@ -390,10 +390,7 @@ app.layout = dbc.Container(fluid=True, children=[
                                     """BUY: ha az adott napra vonatkozó Bullish/Bearish ratio magasabb a választott exponenciális mozgóátlagnál""",
                                     html.Br(),
                                     """SELL: ha a Bullish/Bearish ratio alacsonyabb""",
-html.Br(),html.Br(),
-                                    """Total Returns: a teljes időszakra számított bruttó nyereség""",
-html.Br(),
-                                    """Volatility: a teljes időszakra számított bruttó nyereség""",
+
 
                                      ], className="card-text")
                 ])
