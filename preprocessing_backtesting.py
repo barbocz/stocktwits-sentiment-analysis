@@ -100,18 +100,18 @@ def tweets_preprocessing(raw_df):
 # Classification
 # Input processed dataframe into model
 # Shows classification report and confusion matrix
-def classification_report(processed_df, model=joblib.load("model\stocktwits_modelNB.pkl")):
-
-    # Getting Precision, Accuracy score from model trained on SPY comments for TSLA
-    test_data = processed_df[processed_df["sentiment"].isin(["Bearish", "Bullish"])]
-    test_preds = model.predict(test_data['message'])
-    accuracy_score(test_data['sentiment'], test_preds)
-
-    print('accuracy score: ', accuracy_score(test_data['sentiment'], test_preds))
-    print('\n')
-    print('confusion matrix: \n', confusion_matrix(test_data['sentiment'], test_preds))
-    print('\n')
-    print(classification_report(test_data['sentiment'], test_preds))
+# def classification_report(processed_df, model=joblib.load("model\stocktwits_modelNB.pkl")):
+#
+#     # Getting Precision, Accuracy score from model trained on SPY comments for TSLA
+#     test_data = processed_df[processed_df["sentiment"].isin(["Bearish", "Bullish"])]
+#     test_preds = model.predict(test_data['message'])
+#     accuracy_score(test_data['sentiment'], test_preds)
+#
+#     print('accuracy score: ', accuracy_score(test_data['sentiment'], test_preds))
+#     print('\n')
+#     print('confusion matrix: \n', confusion_matrix(test_data['sentiment'], test_preds))
+#     print('\n')
+#     print(classification_report(test_data['sentiment'], test_preds))
 
 
 # Using model to classify processed Tweets
@@ -553,30 +553,36 @@ def my_backtest_results(combined_df, ema_list=None):
 
 # Import Tweets & Price
 # df = pd.read_pickle("ST_AAPL_raw.pkl")
-df=pd.read_csv('data\sentiments_TSLA.csv')
-aapl_price_df = load('data\stock_price_TSLA.pkl')
+df=pd.read_csv('data\sentiments_AAPL.csv')
+aapl_price_df = load('data\stock_price_AAPL.pkl')
 trained_model = joblib.load('model\stocktwits_modelNB.pkl')
 
 if __name__ == "__main__":
     cleaned_df = tweets_preprocessing(df)  # Clean
-    # dump(cleaned_df, 'cleaned_df.pkl')
-
-    # df = load('cleaned_df.pkl')
+    # # dump(cleaned_df, 'cleaned_df.pkl')
     #
-    # cleaned_df = load('cleaned_df.pkl')  # Clean
-    #
-    # print('Cleaned')
+    # # df = load('cleaned_df.pkl')
+    # #
+    # # cleaned_df = load('cleaned_df.pkl')  # Clean
+    # #
+    # # print('Cleaned')
     sentiment_df = classify_tweets(cleaned_df, trained_model)  # Classify
-    # # # dump(sentiment_df, 'sentiment_df.pkl')
+    #
+    # # sentiment_df['Date']=pd.to_datetime(df['Date'])
+    # # dump(sentiment_df, 'data\processed_sentiment_AAPL_NEW.pkl')
+
+
     # #
     # # print('Classified')
     filtered_df = filtering_trading_days(sentiment_df)  # Filter
     # # # dump(filtered_df, 'filtered_df.pkl')
     # #
     bb_df = bull_bear_ratio(filtered_df)  # Evaluate
+    dump(bb_df, 'data\processed_sentiment_AAPL_NEW2.pkl')
     # dump(bb_df, 'bb_df.pkl')
     # bb_df=load('bb_df.pkl')
     # bb_df.to_csv('temp\\bb_df..csv')
+    # df = bb_df[bb_df['Date'] == '2020-01-08']
 
     # #
     # #
@@ -590,8 +596,8 @@ if __name__ == "__main__":
     results = backtest_results(merge_df)  # Backtest
     print('Backtested')
 
-    merge_df.to_csv('data\stock_price_merge_TSLA.csv')
-    results.to_csv('data\strategy_TSLA.csv')
+    merge_df.to_csv('data\stock_price_merge_AAPL.csv')
+    results.to_csv('data\strategy_AAPL.csv')
 
 
 

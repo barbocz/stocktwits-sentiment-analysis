@@ -11,24 +11,197 @@ from plotly.subplots import make_subplots
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 import dash_table as dt
 import dash_table.FormatTemplate as FormatTemplate
+from datetime import date
+import json
+import requests
+from datetime import datetime
+from nltk.corpus import stopwords
+import re
+import string
+from nltk.tokenize import word_tokenize
+from joblib import dump, load
+import plotly.express as px
+from dash.exceptions import PreventUpdate
 
 # In[2]:
 
 # In[9]:
 # Read Data
-merge_df_tsla = pd.read_csv("../data/stock_price_merge_AAPL.csv")
-merge_df = pd.read_csv("../data/stock_price_merge_AAPL.csv")
+df_tesla_merged = pd.read_csv("../data/stock_price_merge_TSLA.csv")
+df_aapl_merged = pd.read_csv("../data/stock_price_merge_AAPL.csv")
 aapl_strat = pd.read_csv("../data/strategy_AAPL.csv")
-tsla_strat = pd.read_csv("../data/strategy_AAPL.csv")
+tsla_strat = pd.read_csv("../data/strategy_TSLA.csv")
+
+
+def remove_stopwords(row):
+    stopword_list = stopwords.words('english')
+    words = []
+    for word in row:
+        if word not in stopword_list:
+            words.append(word)
+    return words
+
+
+# Function to remove emojis
+def remove_emoji(tweets):
+    emoji_pattern = re.compile("["
+                               u"\U0001F600-\U0001F64F"  # emoticons
+                               u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+                               u"\U0001F680-\U0001F6FF"  # transport & map symbols
+                               u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+                               u"\U00002500-\U00002BEF"  # chinese char
+                               u"\U00002702-\U000027B0"
+                               u"\U00002702-\U000027B0"
+                               u"\U000024C2-\U0001F251"
+                               u"\U0001f926-\U0001f937"
+                               u"\U00010000-\U0010ffff"
+                               u"\u2640-\u2642"
+                               u"\u2600-\u2B55"
+                               u"\u200d"
+                               u"\u23cf"
+                               u"\u23e9"
+                               u"\u231a"
+                               u"\ufe0f"  # dingbats
+                               u"\u3030"
+                               "]+", flags=re.UNICODE)
+    return emoji_pattern.sub(r'', tweets)
+
+def tweets_preprocessing(raw_df):
+
+    # Removing all tickers from comments
+    raw_df['message'] = raw_df['message'].str.replace(r'([$][a-zA-z]{1,5})', '')
+
+    # Make all sentences small letters
+    # raw_df['message'] = raw_df['message'].str.lower()
+
+    # Converting HTML to UTF-8
+    # raw_df["message"] = raw_df["message"].apply(html.unescape)
+
+    # Removing hastags, mentions, pagebreaks, handles
+    # Keeping the words behind hashtags as they may provide useful information about the comments e.g. #Bullish #Lambo
+    raw_df["message"] = raw_df["message"].str.replace(r'(@[^\s]+|[#]|[$])', ' ')  # Replace '@', '$' and '#...'
+    raw_df["message"] = raw_df["message"].str.replace(r'(\n|\r)', ' ')  # Replace page breaks
+
+    # Removing https, www., any links etc
+    raw_df["message"] = raw_df["message"].str.replace(r'((https:|http:)[^\s]+|(www\.)[^\s]+)', ' ')
+
+    # Removing all numbers
+    # raw_df["message"] = raw_df["message"].str.replace(r'[\d]', '')
+
+    # Remove emoji
+    raw_df["message"] = raw_df["message"].apply(lambda row: remove_emoji(row))
+
+    # Tokenization
+    raw_df['message'] = raw_df['message'].apply(word_tokenize)
+
+    # Remove Stopwords
+    # raw_df['message'] = raw_df['message'].apply(remove_stopwords)
+
+    # Remove Punctuation
+    raw_df['message'] = raw_df['message'].apply(lambda row: [word for word in row if word not in string.punctuation])
+
+    # Combining back to full sentences
+    raw_df['message'] = raw_df['message'].apply(lambda row: ' '.join(row))
+
+    # Remove special punctuation not in string.punctuation
+    raw_df['message'] = raw_df['message'].str.replace(r"\“|\”|\‘|\’|\.\.\.|\/\/|\.\.|\.|\"|\'", '')
+
+    # Remove all empty rows
+    processed_df = raw_df[raw_df['message'].str.contains(r'^\s*$') == False]
+
+    return processed_df
+
+
+def get_today_sentiment_dataframe(ticker):
+    format = "%Y-%m-%dT%H:%M:%SZ"
+    df = pd.DataFrame(columns=['message', 'Date', 'Time', 'Combined sentiment'])
+    stocktwit_url = "https://api.stocktwits.com/api/2/streams/symbol/" + ticker + ".json?"
+    response = requests.get(stocktwit_url)
+    response = json.loads(response.text)
+
+    if response['response']['status'] == 429:
+        print('Rate limit exceeded. Client may not make more than 400 requests an hour.')
+        return df
+
+    last_message_id = response['cursor']['max']
+    done = False
+    while True:
+        stocktwit_url = "https://api.stocktwits.com/api/2/streams/symbol/" + ticker + ".json?" + "max=" + str(
+            last_message_id)
+        try:
+            response = requests.get(stocktwit_url)
+        except Exception:
+            response = None
+
+        response = json.loads(response.text)
+        if response['response']['status'] != 200:
+            print(response)
+            return df
+
+        last_message_id = response['cursor']['max']
+
+        for message in response['messages']:
+            temp = message['entities']['sentiment']
+            if temp is not None and temp['basic']:
+                obj = {}
+                obj['message'] = message['body']
+
+                obj["Date"] = message["created_at"].split("T")[0]
+                obj["Time"] = message["created_at"].split("T")[1].split("Z")[0]
+                obj['Combined sentiment'] = temp['basic']
+                df = df.append(obj, ignore_index=True)
+
+                datetime_obj = datetime.strptime(message['created_at'], format)
+                if datetime_obj.hour < 1:
+                    done = True
+                # print(datetime_obj.hour, datetime_obj.minute)
+        #
+        if done:
+            break
+    # print(df)
+    df = tweets_preprocessing(df)
+    return df
+
+def get_sentiment_property_table(ticker,current_day,ema,total_sentiment,bullish_bearish_ratio):
+
+
+    if ticker == 'AAPL':
+        df = df_aapl_merged
+    elif ticker == 'TSLA':
+        df = df_tesla_merged
+
+    df_for_selected_day = df[df['Date'] == current_day]
+    if len(df_for_selected_day) == 0:
+        df_for_selected_day = df.iloc[-1:]
+    else:
+        bullish_bearish_ratio = df_for_selected_day['Bull/Bear Ratio'].values[0]
+        total_sentiment = df_for_selected_day['Bullish'].values[0] + df_for_selected_day['Bearish'].values[0]
+
+    calculated_ema = df_for_selected_day[f'Bull/Bear Ratio EMA {ema}'].values[0]
+
+    if (bullish_bearish_ratio>calculated_ema):
+        signal = 'BUY'
+    else:
+        signal='SELL'
+
+    row1 = html.Tr([html.Td("Date:"), html.Td(current_day)])
+    row2 = html.Tr([html.Td("Total sentiment:"), html.Td(total_sentiment)])
+    row3 = html.Tr([html.Td("Bullish / Bearish ratio:"), html.Td('{:.3f}'.format(bullish_bearish_ratio))])
+    row4 = html.Tr([html.Td("Bullish / Bearish  EMA ratio:"), html.Td('{:.3f}'.format(calculated_ema))])
+    row5 = html.Tr([html.Td("Signal:"), html.Td(signal)])
+    row6 = html.Tr([html.Td(""), html.Td("")])
+    table_body = [html.Tbody([row1, row2, row3, row4, row5,row6])]
+    table = dbc.Table( table_body, bordered=True)
+    return table
 
 
 # Functions
 # days = 253-1 since day 000 has no returns
-def sharpe(ema, ticker, rf=0, days=252):
+def sharpe(ema, ticker, rf=0, days=450):
     if ticker == '$AAPL':
         df = aapl_strat[f'Portfolio Value EMA {ema}'].pct_change()
         sharpe_ratio = np.sqrt(days) * (df.mean() - rf) / df.std()
@@ -81,7 +254,7 @@ def num_sell_trades(ema, ticker):
         return len(tsla_strat.loc[tsla_strat[f'Action EMA {ema}'].str.contains('SELL')])
 
 
-def volatility(ema, ticker, days=252):
+def volatility(ema, ticker, days=450):
     if ticker == '$AAPL':
         df = aapl_strat[f'Portfolio Value EMA {ema}'].pct_change()
         daily_vol = np.log(1 + df).std()
@@ -137,7 +310,7 @@ def get_table(df, ema, ticker):
     }]
 
     package = html.Div([
-                        dbc.Col(html.H4(f'EMA {ema} Trade Log ({ticker})')),
+
                         dbc.Col(dt.DataTable(data=data, columns=columns, id='table',
                                              fixed_rows={'headers': True},
                                              style_table={'height': 350},
@@ -174,8 +347,7 @@ navbar = dbc.Nav(className="navbar-nav mr-auto", children=[
                              href="https://stocktwits.com/symbol/AAPL", target="_blank"),
         dbc.DropdownMenuItem([html.I(className="fa fa-car"), "  $TSLA Stocktwits"],
                              href="https://stocktwits.com/symbol/TSLA", target="_blank"),
-        dbc.DropdownMenuItem([html.I(className="fa fa-linkedin"), "  Linkedin"],
-                             href="https://www.linkedin.com/in/jay-lin-jiele-02a5a114a/", target="_blank"),
+
     ])
 ])
 
@@ -202,25 +374,26 @@ app.layout = dbc.Container(fluid=True, children=[
             dbc.Col(html.Div(id="output-panel")),
             html.Br(), html.Br(),
             dbc.Col(dbc.Card(body=True, className="card bg-light mb-3", children=[
-                html.Div("About This Dashboard", className="card-header"),
+                html.Div("Feladat leírása", className="card-header"),
                 html.Div(className="card-body", children=[
-                    html.P(children=["""This experiment aims to mine $TSLA and $AAPL sentiments 
-                    on StockTwits and derive trading signals based on their pre-market sentiments moving 
-                    averages. StockTwits is a social media platform for retail traders to share their 
-                    speculations and sentiments regarding any stock.""",
+                    html.P(children=["""Input adatként vesszük a Stocktwits.com Apple-l és Tesla-val foglalkozó tweet-jeit. 
+                                        A Stocktwits-es tweet-ek tulajdonsága, hogy nagyobb részük Bearish/Bullish tag-gal van ellátva.
+                                        Ez alapján egyszerű logisztikus regresszió használatával modell-t hozunk létre ami a nem felcímkézett tweet-ek
+                                        besorolását végzi.""",
+
                                      html.Br(),
                                      html.Br(),
-                                     """This dashboard was built on Plotly Dash to make it interactive. You can
-                                     tweak the EMAs from the slider bar above to view the different backtest
-                                      performances.""",
+                                     """Minden naphoz képzünk egy arányt a Bullish és Bearish tweet-ek számából majd ezekből számoljuk az exponenciális mozgó átlagokat.""",
                                      html.Br(), html.Br(),
-                                     """Thanks for viewing, you may find out more about the project through my 
-                                     article on """,
-                                     html.A("Medium.",
-                                            href='https://jayljl.medium.com/mining-stocktwits-retail-sentiments-'
-                                                 'for-momentum-trading-4594a91833b4',
-                                            target="_blank",
-                                            style={'color': 'blue'})
+                                     """Trading stratégia:""",
+                                    html.Br(),
+                                    """BUY: ha az adott napra vonatkozó Bullish/Bearish ratio magasabb a választott exponenciális mozgóátlagnál""",
+                                    html.Br(),
+                                    """SELL: ha a Bullish/Bearish ratio alacsonyabb""",
+html.Br(),html.Br(),
+                                    """Total Returns: a teljes időszakra számított bruttó nyereség""",
+html.Br(),
+                                    """Volatility: a teljes időszakra számított bruttó nyereség""",
 
                                      ], className="card-text")
                 ])
@@ -238,12 +411,163 @@ app.layout = dbc.Container(fluid=True, children=[
                      ],
                      active_tab="$AAPL"),
             dcc.Graph(id='Portfolio-chart'),
-            dcc.Graph(id='buy-sell-chart'),
+            dcc.Graph(id='buy-sell-chart', clickData={'points': [{'customdata': date.today().strftime("%Y-%m-%d")}]}),
             dcc.Graph(id='bull-bear-chart'),
-            dbc.Col(html.Div(id="data-table"))
+
+            dbc.Tabs(className="nav nav-pills", id='my-tab',
+                     children=[
+                         dbc.Tab(label='Trade Log', tab_id='t1'),
+                         dbc.Tab(label=f'Sentiments on {date.today().strftime("%Y-%m-%d")}', tab_id='t2',id='sentiment_tab')
+                     ],
+                     active_tab="t1"),
+            html.Div(id="trade-log-content",children=[dbc.Col(html.Div(id="data-table"))]),
+            html.Div(id='sentiment-content',children=[dbc.Button("Refresh", id="refresh_button", n_clicks=0)] )
+
+
+
         ])
     ])
 ])
+
+
+
+
+@app.callback(
+    [Output('trade-log-content', 'style'),Output('sentiment-content', 'style'),Output('sentiment-content','children')],
+    [Input('slider', 'value'),Input('yaxis-column', 'active_tab'),Input('sentiment_tab','label'),Input('my-tab','active_tab')])
+def update_y_timeseries(ema,ticker,selected_day,active_tab):
+
+    # ctx = dash.callback_context
+    # print(ctx)
+    ticker=ticker.replace('$', '')
+    # print('selected_day ',selected_day)
+    selected_day=selected_day.split("on ")[1]
+    # if (len(clickData['points'])==3):
+    #     selected_day=clickData['points'][1]['x']
+    # else:
+    #     selected_day=date.today().strftime("%Y-%m-%d")
+
+    if active_tab == "t1":
+        # dbc.Col(html.H4(f'EMA {ema} Trade Log ({ticker})')),
+        return {'display': 'inline'},{'display': 'none'},dbc.Button("Get Today's Sentiment", id="refresh_button", n_clicks=0)
+
+    elif active_tab == "t2":
+        if selected_day!=date.today().strftime("%Y-%m-%d"):
+            df = load(f'../data/processed_sentiment_{ticker}.pkl')
+            df['Date'] = pd.to_datetime(df['Date'])
+            df = df[df['Date'] == selected_day]
+        else:
+            df = get_today_sentiment_dataframe(ticker)
+
+
+        value_counts = df['Combined sentiment'].value_counts()
+        bullish_bearish_ratio = (value_counts['Bullish']/value_counts['Bearish'])
+        total_sentiment = len(df)
+
+
+        data = df.to_dict('rows')
+
+        columns = [{
+            'id': 'Time',
+            'name': 'Time',
+            'type': 'text'
+        }, {
+            'id': 'message',
+            'name': 'Message',
+            'type': 'text'
+        }, {
+            'id': 'Combined sentiment',
+            'name': 'Sentiment',
+            'type': 'text'
+        }]
+
+        data_table = dt.DataTable(data=data, columns=columns, id='table',
+
+                                  style_header={'fontWeight': 'bold', 'backgroundColor': 'black',
+                                                'color': 'white', 'textAlign': 'left'},
+                                  style_cell={
+                                      'whiteSpace': 'normal', 'textAlign': 'left',
+                                      'height': 'auto'},
+                                  page_size=10,
+
+                                  style_data_conditional=[
+                                      {
+                                          'if': {
+                                              'filter_query': '{Combined sentiment} eq "Bullish"'
+
+                                          },
+                                          'backgroundColor': 'rgb(50, 205, 50)'
+                                      },
+                                      {
+                                          'if': {
+                                              'filter_query': '{Combined sentiment} eq "Bearish"'
+
+                                          },
+                                          'backgroundColor': 'rgb(255, 69, 0)'
+                                      }
+                                  ]
+                                  )
+        property_table = get_sentiment_property_table(ticker,selected_day, ema,total_sentiment,bullish_bearish_ratio)
+
+        pie_chart = dcc.Graph(id='pie-chart', figure=px.pie(names=value_counts.index, values=value_counts.values,
+                                                            color=value_counts.index,
+                                                            color_discrete_map={'Bullish': 'rgb(50, 205, 50)',
+                                                                                'Bearish': 'rgb(255, 69, 0)'}, ))
+
+        tab_content=html.Div(id='sentiment_div',  children=[
+            html.Div(id='sentiment_table', style={'width': '32%', 'display': 'inline-block'}, children=[data_table]),
+            html.Div(children=[pie_chart],
+                     style={'width': '32%', 'float': 'right', 'display': 'inline-block'}),
+            html.Div(children=[
+                html.Div(className="card-body", id='sentiment_property', children=[property_table]),
+                dbc.Button("Get Today's Sentiment", id="refresh_button", n_clicks=0)
+            ], style={'width': '32%', 'float': 'right', 'display': 'inline-block'})
+        ])
+
+        return {'display': 'none'}, {'display': 'inline'}, tab_content
+
+# @app.callback(Output('sentiment_tab','label'),
+#                 Input('buy-sell-chart', 'clickData'))
+# def day_was_selected_from_chart(clickData):
+#     selected_day = clickData['points'][1]['x']
+#     return f'Sentiment on {selected_day}'
+
+@app.callback([Output('sentiment_tab','label'),Output('my-tab','active_tab')],
+              [ Input('buy-sell-chart', 'clickData'), Input('refresh_button', 'n_clicks'),State('buy-sell-chart', 'clickData')],prevent_initial_call=True)
+def get_today_sentiment(clickData,n_clicks,old):
+    ctx = dash.callback_context
+    if ctx.triggered:
+        triggered_by = ctx.triggered[0]["prop_id"].split(".")[0]
+        if triggered_by=='buy-sell-chart' and len(clickData['points'])==3:
+            selected_day = clickData['points'][1]['x']
+            return f'Sentiment on {selected_day}', 't2'
+        elif triggered_by=='refresh_button' and n_clicks>0:
+            return f'Sentiment on {date.today().strftime("%Y-%m-%d")}', 't2'
+    raise PreventUpdate
+
+
+    # # print('label changed ',n_clicks,clickData,old)
+    # if n_clicks==0:
+    #     raise PreventUpdate
+    # selected_day = date.today().strftime("%Y-%m-%d")
+    # if n_clicks>0:
+    #     return f'Sentiment on {selected_day}', 't2'
+    # elif len(clickData['points'])==3:
+    #     selected_day = clickData['points'][1]['x']
+    #     return f'Sentiment on {selected_day}', 't2'
+    # else:
+    #     return f'Sentiment on {selected_day}', 't1'
+    # return 'Sentiment'
+
+# @app.callback(Output('tabs-example-content', 'children'),
+#               Input('tabs-example', 'value'))
+# def render_content(tab):
+#     if tab == 'tab-1':
+#         return dcc.Graph(id='bull-bear-chart')
+#     elif tab == 'tab-2':
+#         return html.Div([
+#             html.H3('Tab content 2')
+#         ])
 
 
 # Function to render Portfolio Chart
@@ -261,18 +585,7 @@ def update_graph(yaxis_column_name, ema):
                        line=dict(color='red', width=0.5), fill='tozeroy')
         ]
         fig = go.Figure(data=data)
-        fig.update_xaxes(
-            rangeslider_visible=False,
-            rangeselector=dict(
-                buttons=list([
-                    dict(count=1, label="1m", step="month", stepmode="backward"),
-                    dict(count=3, label="3m", step="month", stepmode="backward"),
-                    dict(count=6, label="6m", step="month", stepmode="backward"),
-                    #             dict(count=1, label="1y", step="year", stepmode="backward"),
-                    dict(step="all")
-                ])
-            )
-        )
+
 
         fig.update_layout(
             title=f"<b>Portfolio Performance ($TSLA) - EMA {ema}</b>",
@@ -288,7 +601,7 @@ def update_graph(yaxis_column_name, ema):
                 showline=True,
                 tickmode='auto',
                 fixedrange=True,
-                range=['2021-01-01', '2021-04-01']),
+                range=['2020-01-01', '2021-04-01']),
             yaxis=dict(
                 type='linear',
                 showline=False,
@@ -309,18 +622,7 @@ def update_graph(yaxis_column_name, ema):
                        line=dict(color='black', width=0.5), fill='tozeroy')
         ]
         fig = go.Figure(data=data)
-        fig.update_xaxes(
-            rangeslider_visible=False,
-            rangeselector=dict(
-                buttons=list([
-                    dict(count=1, label="1m", step="month", stepmode="backward"),
-                    dict(count=3, label="3m", step="month", stepmode="backward"),
-                    dict(count=6, label="6m", step="month", stepmode="backward"),
-                    #             dict(count=1, label="1y", step="year", stepmode="backward"),
-                    dict(step="all")
-                ])
-            )
-        )
+
 
         fig.update_layout(
             title=f"<b>Portfolio Performance ($AAPL) - EMA {ema}</b>",
@@ -336,14 +638,14 @@ def update_graph(yaxis_column_name, ema):
                 showline=True,
                 tickmode='auto',
                 fixedrange=True,
-                range=['2021-01-01', '2021-04-01']),
+                ),
             yaxis=dict(
                 type='linear',
                 showline=False,
                 showgrid=False,
                 ticksuffix=' USD',
                 fixedrange=True,
-                range=[6000, 18000]
+                range=[7000, 13000]
             ))
         fig.update_xaxes(showspikes=True, spikecolor="black", spikesnap="cursor", spikemode="across",
                          tickformat='%d %b %y')
@@ -362,6 +664,7 @@ def update_graph(yaxis_column_name, ema):
         data = [
             go.Scatter(x=tsla_strat[f'Date EMA {ema}'], y=(tsla_strat[f"Adjusted Close EMA {ema}"]),
                        mode='lines', name="TSLA Closing Price",
+
                        line=dict(color='#86d3e3', width=2)),
             go.Scatter(x=tsla_strat.loc[tsla_strat[f"Action EMA {ema}"].str.contains("BUY"), f"Date EMA {ema}"],
                        y=(tsla_strat.loc[
@@ -375,18 +678,7 @@ def update_graph(yaxis_column_name, ema):
                        marker=dict(symbol='triangle-down', color="red", size=7))
         ]
         fig = go.Figure(data=data)
-        fig.update_xaxes(
-            rangeslider_visible=False,
-            rangeselector=dict(
-                buttons=list([
-                    dict(count=1, label="1m", step="month", stepmode="backward"),
-                    dict(count=3, label="3m", step="month", stepmode="backward"),
-                    dict(count=6, label="6m", step="month", stepmode="backward"),
-                    #             dict(count=1, label="1y", step="year", stepmode="backward"),
-                    dict(step="all")
-                ])
-            )
-        )
+
 
         fig.update_layout(
             title=f"<b>Long/ Short Signal ($TSLA) - EMA {ema}</b>",
@@ -402,7 +694,7 @@ def update_graph(yaxis_column_name, ema):
                 showline=True,
                 tickmode='auto',
                 fixedrange=True,
-                range=['2021-01-01', '2021-04-01']),
+                range=['2020-01-01', '2021-04-01']),
             yaxis=dict(
                 type='linear',
                 showline=False,
@@ -420,6 +712,7 @@ def update_graph(yaxis_column_name, ema):
         data = [
             go.Scatter(x=aapl_strat[f'Date EMA {ema}'], y=(aapl_strat[f"Adjusted Close EMA {ema}"]),
                        mode='lines', name="AAPL Closing Price",
+                       customdata=tsla_strat[f'Date EMA {ema}'],
                        line=dict(color='#86d3e3', width=2)),
             go.Scatter(x=aapl_strat.loc[aapl_strat[f"Action EMA {ema}"].str.contains("BUY"), f"Date EMA {ema}"],
                        y=(aapl_strat.loc[
@@ -433,18 +726,7 @@ def update_graph(yaxis_column_name, ema):
                        marker=dict(symbol='triangle-down', color="red", size=7))
         ]
         fig = go.Figure(data=data)
-        fig.update_xaxes(
-            rangeslider_visible=False,
-            rangeselector=dict(
-                buttons=list([
-                    dict(count=1, label="1m", step="month", stepmode="backward"),
-                    dict(count=3, label="3m", step="month", stepmode="backward"),
-                    dict(count=6, label="6m", step="month", stepmode="backward"),
-                    #             dict(count=1, label="1y", step="year", stepmode="backward"),
-                    dict(step="all")
-                ])
-            )
-        )
+
 
         fig.update_layout(
             title=f"<b>Long/ Short Signal ($AAPL) - EMA {ema}</b>",
@@ -460,7 +742,7 @@ def update_graph(yaxis_column_name, ema):
                 showline=True,
                 tickmode='auto',
                 fixedrange=True,
-                range=['2021-01-01', '2021-04-01']),
+                range=['2020-01-01', '2021-04-01']),
             yaxis=dict(
                 type='linear',
                 showline=False,
@@ -518,8 +800,9 @@ def update_graph_2(yaxis_column_name):
 
         # TSLA Bullish Area (Visible when TSLA Dropdown)
         fig.add_trace(go.Scatter(
-            x=merge_df_tsla["Date"], y=merge_df_tsla["% of Bullish"],
+            x=df_tesla_merged["Date"], y=df_tesla_merged["% of Bullish"],
             mode='lines',
+
             name="Bullish",
             line=dict(width=1, color='rgba(0,102,0,0.3)'),
             stackgroup='one',
@@ -527,7 +810,7 @@ def update_graph_2(yaxis_column_name):
 
         # TSLA Bearish Area (Visible when TSLA Dropdown)
         fig.add_trace(go.Scatter(
-            x=merge_df_tsla["Date"], y=merge_df_tsla["% of Bearish"],
+            x=df_tesla_merged["Date"], y=df_tesla_merged["% of Bearish"],
             mode='lines',
             name="Bearish",
             line=dict(width=1, color='rgba(190,23,23,0.3)'),
@@ -535,7 +818,7 @@ def update_graph_2(yaxis_column_name):
 
         # TSLA Chart (Visible when TSLA Dropdown)
         fig.add_trace(go.Scatter(
-            x=merge_df_tsla["Date"], y=merge_df_tsla["Adjusted Close"],
+            x=df_tesla_merged["Date"], y=df_tesla_merged["Adjusted Close"],
             mode='lines',
             name='TSLA Closing Price',
             line=dict(width=2, color='black', dash='solid')),
@@ -543,7 +826,7 @@ def update_graph_2(yaxis_column_name):
 
         # 50% median line (Always visible)
         fig.add_trace(go.Scatter(
-            x=merge_df["Date"], y=merge_df["Middle line"],
+            x=df_tesla_merged["Date"], y=df_tesla_merged["Middle line"],
             mode='lines',
             name="50%",
             line=dict(width=0.5, color='black', dash='dot'),
@@ -551,17 +834,7 @@ def update_graph_2(yaxis_column_name):
             hoverinfo='x'), secondary_y=False)
 
         # Add the top few buttons
-        fig.update_xaxes(
-            rangeslider_visible=False,
-            rangeselector=dict(
-                buttons=list([
-                    dict(count=1, label="1m", step="month", stepmode="backward"),
-                    dict(count=3, label="3m", step="month", stepmode="backward"),
-                    dict(count=6, label="6m", step="month", stepmode="backward"),
-                    dict(step="all")
-                ])
-            )
-        )
+
 
         # Configure x & y axis & hovermode
         fig.update_layout(
@@ -584,7 +857,7 @@ def update_graph_2(yaxis_column_name):
                 tickmode='auto',
                 nticks=7,
                 fixedrange=True,
-                range=['2021-01-01', '2021-04-01']),
+                range=['2020-01-01', '2021-04-01']),
             yaxis=dict(
                 # automargin=True,
                 type='linear',
@@ -618,7 +891,7 @@ def update_graph_2(yaxis_column_name):
         # AAPL
         # AAPL Bullish Area (Visible when AAPL Dropdown)
         fig.add_trace(go.Scatter(
-            x=merge_df["Date"], y=merge_df["% of Bullish"],
+            x=df_aapl_merged["Date"], y=df_aapl_merged["% of Bullish"],
             mode='lines',
             name="Bullish",
             line=dict(width=1, color='rgba(0,102,0,0.3)'),
@@ -627,7 +900,7 @@ def update_graph_2(yaxis_column_name):
 
         # AAPL Bearish Area (Visible when AAPL Dropdown)
         fig.add_trace(go.Scatter(
-            x=merge_df["Date"], y=merge_df["% of Bearish"],
+            x=df_aapl_merged["Date"], y=df_aapl_merged["% of Bearish"],
             mode='lines',
             name="Bearish",
             line=dict(width=1, color='rgba(190,23,23,0.3)'),
@@ -635,7 +908,7 @@ def update_graph_2(yaxis_column_name):
 
         # AAPL Chart (Visible when AAPL Dropdown)
         fig.add_trace(go.Scatter(
-            x=merge_df["Date"], y=merge_df["Adjusted Close"],
+            x=df_aapl_merged["Date"], y=df_aapl_merged["Adjusted Close"],
             mode='lines',
             name='AAPL Closing Price',
             line=dict(width=2, color='black', dash='solid')),
@@ -643,7 +916,7 @@ def update_graph_2(yaxis_column_name):
 
         # 50% median line (Always visible)
         fig.add_trace(go.Scatter(
-            x=merge_df["Date"], y=merge_df["Middle line"],
+            x=df_aapl_merged["Date"], y=df_aapl_merged["Middle line"],
             mode='lines',
             name="50%",
             line=dict(width=0.5, color='black', dash='dot'),
@@ -651,17 +924,7 @@ def update_graph_2(yaxis_column_name):
             hoverinfo='x'), secondary_y=False)
 
         # Add the top few buttons
-        fig.update_xaxes(
-            rangeslider_visible=False,
-            rangeselector=dict(
-                buttons=list([
-                    dict(count=1, label="1m", step="month", stepmode="backward"),
-                    dict(count=3, label="3m", step="month", stepmode="backward"),
-                    dict(count=6, label="6m", step="month", stepmode="backward"),
-                    dict(step="all")
-                ])
-            )
-        )
+
 
         # Configure x & y axis & hovermode
         fig.update_layout(
@@ -682,7 +945,7 @@ def update_graph_2(yaxis_column_name):
                 tickmode='auto',
                 nticks=7,
                 fixedrange=True,
-                range=['2021-01-01', '2021-04-01']),
+                range=['2020-01-01', '2021-04-01']),
             yaxis=dict(
                 type='linear',
                 range=[0, 100],
@@ -765,6 +1028,8 @@ def update_graph(yaxis_column_name, ema):
     elif (yaxis_column_name == "$AAPL") & (ema == 20):
         df = aapl_strat.iloc[:, 71:80]
         return get_table(df, ema, ticker=yaxis_column_name)
+
+
 
 
 # this is needed for the procfile to deploy to heroku

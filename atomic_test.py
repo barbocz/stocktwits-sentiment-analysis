@@ -4,11 +4,31 @@ import pandas as pd
 from datetime import datetime
 from joblib import dump, load
 import plotly.express as px
+import numpy as np
 
-n='2021-04-20T13:26:32Z'
-t=n.split("T")[0]
+aapl_strat = pd.read_csv("data/strategy_AAPL.csv")
+df = aapl_strat['Portfolio Value EMA 5'].pct_change()
+print(df)
+daily_vol = np.log(1 + df).std()
+annualised_vol = daily_vol * np.sqrt(450)
+print( '{:.2f}%'.format(annualised_vol * 100))
+quit()
+#
+# calculated_ema = df[df['Date'] == '2020-01-08'][f'Bull/Bear Ratio EMA {ema}'].values[0]
 
-print(t)
+# if len(calculated_ema) == 0:
+#     calculated_ema = df.iloc[[0, -1]][f'Bull/Bear Ratio EMA {ema}']
+#
+# if (calculated_ema.values[0]>2.0):
+#     print('ok')
+#
+# # print(df.iloc[[0, -1]][f'Portfolio Value EMA {ema}'])
+# print(calculated_ema)
+
+
+
+                                           # '[f'Portfolio Value EMA {ema}']
+
 
 # fig = px.pie(df, values='tip', names='day')
 # fig.show()

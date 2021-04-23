@@ -167,7 +167,7 @@ def get_today_sentiment_dataframe(ticker):
     df = tweets_preprocessing(df)
     return df
 
-def get_sentiment_property_table(current_day,total_sentiment,bearish_bullish_ratio):
+def get_sentiment_property_table(current_day,total_sentiment):
 
     if (bearish_bullish_ratio>ema_value):
         signal = 'SELL'
